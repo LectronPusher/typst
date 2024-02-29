@@ -34,6 +34,9 @@ impl Eval for ast::MathAlignPoint<'_> {
     }
 }
 
+// Note: Single characters like $f(x)$ always parse as "Text" plus delimiting the next thing
+// we only care about multi-character values like $pi(x)$ where it does parse as FuncCall
+
 impl Eval for ast::MathDelimited<'_> {
     type Output = Content;
 

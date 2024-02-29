@@ -22,6 +22,10 @@ impl Eval for ast::FuncCall<'_> {
 
     fn eval(self, vm: &mut Vm) -> SourceResult<Self::Output> {
         let span = self.span();
+
+        // TODO: Where does this check whether the callee is a function?
+        // TODONE: see below line 130-ish
+
         let callee = self.callee();
         let in_math = in_math(callee);
         let callee_span = callee.span();
@@ -31,6 +35,8 @@ impl Eval for ast::FuncCall<'_> {
         if !vm.engine.route.within(Route::MAX_CALL_DEPTH) {
             bail!(span, "maximum function call depth exceeded");
         }
+
+        // This is a 92 line if-else statement D:
 
         // Try to evaluate as a call to an associated function or field.
         let (callee, mut args) = if let ast::Expr::FieldAccess(access) = callee {
@@ -128,6 +134,8 @@ impl Eval for ast::FuncCall<'_> {
         } else {
             (callee.eval(vm)?, args.eval(vm)?.spanned(span))
         };
+
+        // This is the big boi we need to change for runtime subscript paren parsing
 
         // Handle math special cases for non-functions:
         // Combining accent symbols apply themselves while everything else

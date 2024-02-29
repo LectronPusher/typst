@@ -1491,6 +1491,8 @@ impl BinOp {
         })
     }
 
+    // the definition is so clean here :(
+
     /// The precedence of this operator.
     pub fn precedence(self) -> usize {
         match self {
@@ -1592,6 +1594,11 @@ impl<'a> FieldAccess<'a> {
         self.0.cast_last_match().unwrap_or_default()
     }
 }
+
+// It seems that these impls of nodes *are* the defintion of the grammar
+// i.e. FuncCall has the callee() and args() methods, which are its sub values
+// and since the syntax is untyped, valid sub-expressions are defined in the parser.
+
 
 node! {
     /// An invocation of a function or method: `f(x, y)`.

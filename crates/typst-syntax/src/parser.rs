@@ -292,6 +292,7 @@ fn math_expr_prec(p: &mut Parser, min_prec: usize, stop: SyntaxKind) {
                 p.convert(SyntaxKind::Ident);
                 p.wrap(m, SyntaxKind::FieldAccess);
             }
+            // Try to parse a math function call when we're at an identifier and done with field access
             if min_prec < 3 && p.directly_at(SyntaxKind::Text) && p.current_text() == "("
             {
                 math_args(p);
@@ -317,9 +318,10 @@ fn math_expr_prec(p: &mut Parser, min_prec: usize, stop: SyntaxKind) {
         }
 
         SyntaxKind::Root => {
-            if min_prec < 3 {
+            if min_prec < 3 { // I feel like this is always true??
                 p.eat();
                 let m2 = p.marker();
+                // this is the final other place we set precedence
                 math_expr_prec(p, 2, stop);
                 math_unparen(p, m2);
                 p.wrap(m, SyntaxKind::MathRoot);
@@ -353,6 +355,7 @@ fn math_expr_prec(p: &mut Parser, min_prec: usize, stop: SyntaxKind) {
     let mut primed = false;
 
     while !p.eof() && !p.at(stop) {
+        // why do we stop at a bang?
         if p.directly_at(SyntaxKind::Text) && p.current_text() == "!" {
             p.eat();
             p.wrap(m, SyntaxKind::Math);
@@ -379,6 +382,7 @@ fn math_expr_prec(p: &mut Parser, min_prec: usize, stop: SyntaxKind) {
             p.wrap(m, SyntaxKind::MathAttach);
         }
 
+        // this is where we actually use precedence in math
         let Some((kind, stop, assoc, mut prec)) = math_op(p.current()) else {
             // No attachments, so we need to wrap primes as attachment.
             if primed {
@@ -397,7 +401,8 @@ fn math_expr_prec(p: &mut Parser, min_prec: usize, stop: SyntaxKind) {
         }
 
         match assoc {
-            ast::Assoc::Left => prec += 1,
+            // this is the only place where the precedence changes
+            ast::Assoc::Left => prec += 1, // this is why min_prec < 3 matters maybe?? (root is 2 and left)
             ast::Assoc::Right => {}
         }
 
@@ -481,6 +486,7 @@ fn math_class(text: &str) -> Option<MathClass> {
         .and_then(unicode_math_class::class)
 }
 
+// this defines the precedence of the math operators
 fn math_op(kind: SyntaxKind) -> Option<(SyntaxKind, SyntaxKind, ast::Assoc, usize)> {
     match kind {
         SyntaxKind::Underscore => {
@@ -692,6 +698,7 @@ fn code_expr_prec(p: &mut Parser, atomic: bool, min_prec: usize) {
             None
         };
 
+        // math mode wishes it had this simplicity
         if let Some(op) = binop {
             let mut prec = op.precedence();
             if prec < min_prec {
