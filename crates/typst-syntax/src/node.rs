@@ -8,7 +8,13 @@ use ecow::{eco_format, eco_vec, EcoString, EcoVec};
 use crate::ast::AstNode;
 use crate::{FileId, Span, SyntaxKind};
 
+// TODO: The next problem is to make this module public
+// so that we can operate on SyntaxNodes in math.rs
+
 /// A node in the untyped syntax tree.
+/// These are set up as leaf nodes or inner nodes.
+/// Inner nodes are effectively collections of nodes, and
+/// are composed of a vector of the child nodes they contain
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct SyntaxNode(Repr);
 
@@ -364,6 +370,8 @@ impl Debug for LeafNode {
 }
 
 /// An inner node in the untyped syntax tree.
+/// This should really be renamed to ParentNode
+/// Contains the children which compose it and its own outer SyntaxKind
 #[derive(Clone, Eq, PartialEq, Hash)]
 struct InnerNode {
     /// What kind of node this is (each kind would have its own struct in a
@@ -604,7 +612,7 @@ impl InnerNode {
 
 impl Debug for InnerNode {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{:?}: {}", self.kind, self.len)?;
+        write!(f, "{:?}:", self.kind)?;
         if !self.children.is_empty() {
             f.write_str(" ")?;
             f.debug_list().entries(&self.children).finish()?;

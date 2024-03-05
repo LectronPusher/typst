@@ -73,8 +73,11 @@ pub const MARKUP_EXPR: SyntaxSet = SyntaxSet::new()
 /// Syntax kinds that can start a math expression.
 pub const MATH_EXPR: SyntaxSet = SyntaxSet::new()
     .add(SyntaxKind::Hash)
+    .add(SyntaxKind::Dot)
     .add(SyntaxKind::MathIdent)
-    .add(SyntaxKind::Text)
+    .add(SyntaxKind::Opening)
+    .add(SyntaxKind::Closing)
+    .add(SyntaxKind::Text) // can't this be anything?
     .add(SyntaxKind::Shorthand)
     .add(SyntaxKind::Linebreak)
     .add(SyntaxKind::MathAlignPoint)

@@ -135,6 +135,8 @@ pub enum Expr<'a> {
     MathAlignPoint(MathAlignPoint<'a>),
     /// Matched delimiters in math: `[x + y]`.
     MathDelimited(MathDelimited<'a>),
+    Opening(Opening<'a>),
+    Closing(Closing<'a>),
     /// A base with optional attachments in math: `a_1^2`.
     MathAttach(MathAttach<'a>),
     /// Grouped math primes
@@ -206,7 +208,7 @@ pub enum Expr<'a> {
 }
 
 impl<'a> Expr<'a> {
-    fn cast_with_space(node: &'a SyntaxNode) -> Option<Self> {
+    pub fn cast_with_space(node: &'a SyntaxNode) -> Option<Self> {
         match node.kind() {
             SyntaxKind::Space => node.cast().map(Self::Space),
             _ => Self::from_untyped(node),
@@ -238,6 +240,8 @@ impl<'a> AstNode<'a> for Expr<'a> {
             SyntaxKind::MathIdent => node.cast().map(Self::MathIdent),
             SyntaxKind::MathAlignPoint => node.cast().map(Self::MathAlignPoint),
             SyntaxKind::MathDelimited => node.cast().map(Self::MathDelimited),
+            SyntaxKind::Opening => node.cast().map(Self::Opening),
+            SyntaxKind::Closing => node.cast().map(Self::Closing),
             SyntaxKind::MathAttach => node.cast().map(Self::MathAttach),
             SyntaxKind::MathPrimes => node.cast().map(Self::MathPrimes),
             SyntaxKind::MathFrac => node.cast().map(Self::MathFrac),
@@ -300,6 +304,8 @@ impl<'a> AstNode<'a> for Expr<'a> {
             Self::MathIdent(v) => v.to_untyped(),
             Self::MathAlignPoint(v) => v.to_untyped(),
             Self::MathDelimited(v) => v.to_untyped(),
+            Self::Opening(v) => v.to_untyped(),
+            Self::Closing(v) => v.to_untyped(),
             Self::MathAttach(v) => v.to_untyped(),
             Self::MathPrimes(v) => v.to_untyped(),
             Self::MathFrac(v) => v.to_untyped(),
@@ -778,6 +784,9 @@ impl<'a> Math<'a> {
     pub fn exprs(self) -> impl DoubleEndedIterator<Item = Expr<'a>> {
         self.0.children().filter_map(Expr::cast_with_space)
     }
+    pub fn syntax_node(self) -> &'a SyntaxNode {
+        &self.0
+    }
 }
 
 node! {
@@ -831,6 +840,39 @@ impl<'a> MathDelimited<'a> {
     /// The closing delimiter.
     pub fn close(self) -> Expr<'a> {
         self.0.cast_last_match().unwrap_or_default()
+    }
+}
+
+
+node! {
+    Opening
+}
+
+impl<'a> Opening<'a> {
+    /// Get the opening delimiter as text
+    pub fn delim(self) -> &'a EcoString {
+        self.0.text()
+    }
+
+    /// Whether this is a regular opening-paren
+    pub fn is_paren(self) -> bool {
+        self.delim() == "("
+    }
+}
+
+node! {
+    Closing
+}
+
+impl<'a> Closing<'a> {
+    /// Get the opening delimiter as text
+    pub fn delim(self) -> &'a EcoString {
+        self.0.text()
+    }
+
+    /// Whether this is a regular closing-paren
+    pub fn is_paren(self) -> bool {
+        self.delim() == ")"
     }
 }
 
@@ -1597,7 +1639,8 @@ impl<'a> FieldAccess<'a> {
 
 // It seems that these impls of nodes *are* the defintion of the grammar
 // i.e. FuncCall has the callee() and args() methods, which are its sub values
-// and since the syntax is untyped, valid sub-expressions are defined in the parser.
+// and since the syntax is untyped, valid sub-expressions are implicitly
+// defined in the parser.
 
 
 node! {

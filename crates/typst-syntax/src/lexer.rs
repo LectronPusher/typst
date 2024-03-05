@@ -1,5 +1,6 @@
 use ecow::{eco_format, EcoString};
 use unicode_ident::{is_xid_continue, is_xid_start};
+use unicode_math_class::MathClass;
 use unicode_script::{Script, UnicodeScript};
 use unicode_segmentation::UnicodeSegmentation;
 use unscanny::Scanner;
@@ -376,7 +377,6 @@ impl Lexer<'_> {
             ':' if self.s.eat_if(":=") => SyntaxKind::Shorthand,
             '!' if self.s.eat_if('=') => SyntaxKind::Shorthand,
             '.' if self.s.eat_if("..") => SyntaxKind::Shorthand,
-            '[' if self.s.eat_if('|') => SyntaxKind::Shorthand,
             '<' if self.s.eat_if("==>") => SyntaxKind::Shorthand,
             '<' if self.s.eat_if("-->") => SyntaxKind::Shorthand,
             '<' if self.s.eat_if("--") => SyntaxKind::Shorthand,
@@ -400,20 +400,36 @@ impl Lexer<'_> {
             '>' if self.s.eat_if('>') => SyntaxKind::Shorthand,
             '|' if self.s.eat_if("->") => SyntaxKind::Shorthand,
             '|' if self.s.eat_if("=>") => SyntaxKind::Shorthand,
-            '|' if self.s.eat_if(']') => SyntaxKind::Shorthand,
             '|' if self.s.eat_if('|') => SyntaxKind::Shorthand,
             '~' if self.s.eat_if("~>") => SyntaxKind::Shorthand,
             '~' if self.s.eat_if('>') => SyntaxKind::Shorthand,
+            // TODO: we might also want to break out `-` for future identifiers
             '*' | '-' => SyntaxKind::Shorthand,
 
+            // Note: also added dot
+            '.' => SyntaxKind::Dot,
             '#' => SyntaxKind::Hash,
             '_' => SyntaxKind::Underscore,
             '$' => SyntaxKind::Dollar,
             '/' => SyntaxKind::Slash,
             '^' => SyntaxKind::Hat,
             '\'' => SyntaxKind::Prime,
+            // TODO: we should really just group primes in the lexer
             '&' => SyntaxKind::MathAlignPoint,
             '√' | '∛' | '∜' => SyntaxKind::Root,
+
+            // Opening/Closing delimiters
+            // Shorthand delimiters `[| a |]` also get Opening/Closing Kinds
+            // TODO: Need to convert these back to shorthand later
+            '[' if self.s.eat_if('|') => SyntaxKind::Opening,
+            '|' if self.s.eat_if(']') => SyntaxKind::Closing,
+
+            c if unicode_math_class::class(c) == Some(MathClass::Opening) => {
+                SyntaxKind::Opening
+            },
+            c if unicode_math_class::class(c) == Some(MathClass::Closing) => {
+                SyntaxKind::Closing
+            },
 
             // Identifiers.
             c if is_math_id_start(c) && self.s.at(is_math_id_continue) => {
@@ -587,6 +603,12 @@ impl Lexer<'_> {
         SyntaxKind::Numeric
     }
 
+
+    // TODO: make this take a delimiter to get out early
+    // in case we don't have an enclosed string, to go back and
+    // improve the parsed source tree
+    // keep a marker of the first matching delimiter then revert to it
+    // and let the parser keep doing everything else without issue
     fn string(&mut self) -> SyntaxKind {
         let mut escaped = false;
         self.s.eat_until(|c| {

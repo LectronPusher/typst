@@ -55,17 +55,45 @@ pub enum SyntaxKind {
     /// A mathematical equation: `$x$`, `$ x^2 $`.
     Equation,
 
+    // NOTE: we can only add 3 more of these... (124/127 bits in SyntaxSet)
+    // with MathOpening/MathClosing: 126/127
+
     /// The contents of a mathematical equation: `x^2 + 1`.
     Math,
     /// An identifier in math: `pi`.
     MathIdent,
     /// An alignment point in math: `&`.
     MathAlignPoint,
-    /// Matched delimiters in math: `[x + y]`.
+
+    /// Matched delimiters in math: `[x + y]`, `[0, inf)`.
+    /// We need to allow any opening/closing pair due to interval notation :/
     MathDelimited,
+    // TODO: rename these to MathClosing and MathOpening
+    /// A unicode MathClass::Opening character or shorthand: `(`, `〈`, `[|`, etc.
+    Opening,
+    /// A unicode MathClass::Closing character or shorthand: `)`, `⌋`, `|]`, etc.
+    Closing,
+    // Don't do anything special for MathClass::Fence due to false positives
+    // TODO: maybe try to match fences exclusively to other fences?
+    // Unicode math classes: https://www.unicode.org/Public/math/revision-14/MathClass-14.txt
+
+    // flatten:
+    // - math operators
+    // - all delimiters
+    // - function calls
+    // - field access
+    // - prime application
+    // don't flatten:
+    // - code mode
+    // - groups of primes (remove the base)
+    // separate:
+    // - text into potential delimiters (who contains the spaces?)
+    // - opening and closing braces
+    // - dots
+
     /// A base with optional attachments in math: `a_1^2`.
     MathAttach,
-    /// Grouped primes in math: `a'''`.
+    /// Grouped primes in math: `a'''` (does not include the base).
     MathPrimes,
     /// A fraction in math: `x/2`.
     MathFrac,
@@ -281,6 +309,8 @@ impl SyntaxKind {
         )
     }
 
+    // TODO: why do these functions not use SyntaxSet?
+
     /// Does this node terminate a preceding expression?
     pub fn is_terminator(self) -> bool {
         matches!(
@@ -381,6 +411,8 @@ impl SyntaxKind {
             Self::MathIdent => "math identifier",
             Self::MathAlignPoint => "math alignment point",
             Self::MathDelimited => "delimited math",
+            Self::Opening => "opening delimiter",
+            Self::Closing => "closing delimiter",
             Self::MathAttach => "math attachments",
             Self::MathFrac => "math fraction",
             Self::MathRoot => "math root",

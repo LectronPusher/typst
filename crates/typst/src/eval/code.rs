@@ -68,6 +68,7 @@ impl Eval for ast::Expr<'_> {
             error!(span, "{} is only allowed directly in code and content blocks", name)
         };
 
+        // TODO: fix Opening/Closing??? Why did I write this??
         let v = match self {
             Self::Text(v) => v.eval(vm).map(Value::Content),
             Self::Space(v) => v.eval(vm).map(Value::Content),
@@ -91,6 +92,8 @@ impl Eval for ast::Expr<'_> {
             Self::MathIdent(v) => v.eval(vm),
             Self::MathAlignPoint(v) => v.eval(vm).map(Value::Content),
             Self::MathDelimited(v) => v.eval(vm).map(Value::Content),
+            Self::Opening(v) => v.eval(vm).map(Value::Content),
+            Self::Closing(v) => v.eval(vm).map(Value::Content),
             Self::MathAttach(v) => v.eval(vm).map(Value::Content),
             Self::MathPrimes(v) => v.eval(vm).map(Value::Content),
             Self::MathFrac(v) => v.eval(vm).map(Value::Content),
