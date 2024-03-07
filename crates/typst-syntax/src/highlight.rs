@@ -193,6 +193,7 @@ pub fn highlight(node: &LinkedNode) -> Option<Tag> {
             _ => Some(Tag::Operator),
         },
         SyntaxKind::Underscore => match node.parent_kind() {
+            Some(SyntaxKind::MathAttach) => Some(Tag::MathOperator),
             Some(SyntaxKind::Math) => Some(Tag::MathOperator),
             _ => None,
         },
@@ -200,6 +201,7 @@ pub fn highlight(node: &LinkedNode) -> Option<Tag> {
         SyntaxKind::Plus => Some(Tag::Operator),
         SyntaxKind::Minus => Some(Tag::Operator),
         SyntaxKind::Slash => Some(match node.parent_kind() {
+            Some(SyntaxKind::MathFrac) => Tag::MathOperator,
             Some(SyntaxKind::Math) => Tag::MathOperator,
             _ => Tag::Operator,
         }),

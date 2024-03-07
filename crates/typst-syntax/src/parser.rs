@@ -28,6 +28,8 @@ use crate::{ast, is_ident, is_newline, set, LexMode, Lexer, SyntaxKind, SyntaxNo
 // maybe a literature (blog-post) review of precedence parsing techniques is
 // necessary at some point?
 
+static FLAT: bool = false;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -37,27 +39,11 @@ mod tests {
     fn ian_basic() {
         let text = r#"$"aa"^x - b_1$"#;
         println!("{text}\n");
-        let mut p = Parser::new(text, 0, LexMode::Markup);
-        equation(&mut p);
-        let syntax_node = p.finish().into_iter().next().unwrap();
+        let syntax_node = parse(text);
         println!("{syntax_node:#?}\n");
         // println!("{:#?}\n", syntax_node.cast::<ast::Markup>().unwrap());
     }
 
-    #[test]
-    fn class() {
-        let v = vec![
-            "", "a", "1", ".", "(", ")", "|", "{", "-", "_", "^", "/", "%", "$", "@",
-            "!", "'", "\"", ";", "*", "~", "`", "'a", "a'", "'a1*", "aa", "a1",
-        ];
-        for i in v {
-            if let Some(c) = math_class(i) {
-                println!("'{i}': {:?}", c);
-            } else {
-                println!("'{i}': None");
-            }
-        }
-    }
 }
 
 /// Parses a source file.
@@ -320,10 +306,10 @@ fn math(p: &mut Parser, mut stop: impl FnMut(&Parser) -> bool) {
 /// Parses a single math expression: This includes math elements like
 /// attachment, fractions, and roots, and embedded code expressions.
 fn math_expr(p: &mut Parser) {
-    if false {
-        math_expr_prec(p, 0, SyntaxKind::Eof)
-    } else {
+    if FLAT {
         math_expr_flat(p)
+    } else {
+        math_expr_prec(p, 0, SyntaxKind::Eof)
     }
 }
 
@@ -390,7 +376,7 @@ fn math_expr_prec(p: &mut Parser, min_prec: usize, stop: SyntaxKind) {
         SyntaxKind::MathIdent => {
             continuable = true;
             p.eat();
-            while p.directly_at(SyntaxKind::Text) && p.current_text() == "." && {
+            while p.directly_at(SyntaxKind::Dot) && {
                 let mut copy = p.lexer.clone();
                 let start = copy.cursor();
                 let next = copy.next();
@@ -403,7 +389,7 @@ fn math_expr_prec(p: &mut Parser, min_prec: usize, stop: SyntaxKind) {
                 p.wrap(m, SyntaxKind::FieldAccess);
             }
             // Try to parse a math function call when we're at an identifier and done with field access
-            if min_prec < 3 && p.directly_at(SyntaxKind::Text) && p.current_text() == "("
+            if min_prec < 3 && p.directly_at(SyntaxKind::Opening) && p.current_text() == "("
             {
                 math_args(p);
                 p.wrap(m, SyntaxKind::FuncCall);
@@ -413,6 +399,9 @@ fn math_expr_prec(p: &mut Parser, min_prec: usize, stop: SyntaxKind) {
 
         SyntaxKind::Text | SyntaxKind::Shorthand => {
             continuable = matches!(
+                // The point of this is to avoid parsing non-alphabetic text in the same
+                // way as function calls but to keep consistency with function call
+                // precedence for regular text.
                 math_class(p.current_text()),
                 // TODO: should probably also check MathClass::Normal
                 None | Some(MathClass::Alphabetic)
@@ -429,7 +418,8 @@ fn math_expr_prec(p: &mut Parser, min_prec: usize, stop: SyntaxKind) {
         }
 
         SyntaxKind::Root => {
-            if min_prec < 3 { // I feel like this is always true??
+            // I feel like this is always true??
+            if min_prec < 3 {
                 p.eat();
                 let m2 = p.marker();
                 // this is the final other place we set precedence
@@ -446,13 +436,17 @@ fn math_expr_prec(p: &mut Parser, min_prec: usize, stop: SyntaxKind) {
                 let m2 = p.marker();
                 p.eat();
                 // Eat the group until the space.
-                while p.eat_if_direct(SyntaxKind::Prime) {println!("a")}
+                while p.eat_if_direct(SyntaxKind::Prime) {}
                 p.wrap(m2, SyntaxKind::MathPrimes);
             }
         }
 
         SyntaxKind::Opening => math_delimited(p),
+        SyntaxKind::Closing if p.current_text() == "|]" => {
+            p.convert(SyntaxKind::Shorthand)
+        }
         SyntaxKind::Closing => p.eat(),
+        SyntaxKind::Dot => p.convert(SyntaxKind::Text),
 
         _ => p.expected("math expression"),
     }
@@ -571,10 +565,16 @@ fn maybe_delimited(p: &mut Parser) -> bool {
 
 fn math_delimited(p: &mut Parser) {
     let m = p.marker();
+    if p.current_text() == "[|" {
+        p.current = SyntaxKind::Shorthand;
+    }
     p.eat();
     let m2 = p.marker();
     while !p.eof() && !p.at(SyntaxKind::Dollar) {
-        if math_class(p.current_text()) == Some(MathClass::Closing) {
+        if p.at(SyntaxKind::Closing) {
+            if p.current_text() == "|]" {
+                p.current = SyntaxKind::Shorthand;
+            }
             p.wrap(m2, SyntaxKind::Math);
             p.eat();
             p.wrap(m, SyntaxKind::MathDelimited);
@@ -636,6 +636,7 @@ fn math_class(text: &str) -> Option<MathClass> {
     }
 
     let mut chars = text.chars();
+    // Return the unicode math class of exactly one char
     chars
         .next()
         .filter(|_| chars.next().is_none())
@@ -728,7 +729,7 @@ fn math_args(p: &mut Parser) {
         p.wrap(array, SyntaxKind::Array);
     }
 
-    if p.at(SyntaxKind::Text) && p.current_text() == ")" {
+    if p.at(SyntaxKind::Closing) && p.current_text() == ")" {
         p.convert(SyntaxKind::RightParen);
     } else {
         p.expected("closing paren");
@@ -1695,10 +1696,12 @@ impl<'s> Parser<'s> {
         self.at(SyntaxKind::Eof)
     }
 
+    /// Check if the current token matches without moving forward.
     fn directly_at(&self, kind: SyntaxKind) -> bool {
         self.current == kind && self.prev_end == self.current_start
     }
 
+    /// Consume the current token and get prepare the next.
     fn eat(&mut self) {
         self.save();
         self.lex();
@@ -1740,6 +1743,7 @@ impl<'s> Parser<'s> {
         self.eat();
     }
 
+    /// Convert the current node to a different kind and eat the next.
     fn convert(&mut self, kind: SyntaxKind) {
         self.current = kind;
         self.eat();
@@ -1842,6 +1846,7 @@ impl<'s> Parser<'s> {
         self.nodes.truncate(checkpoint.nodes);
     }
 
+    /// Move the parser forward, and if in Math/Code, skip any trivia tokens.
     fn skip(&mut self) {
         if self.lexer.mode() != LexMode::Markup {
             while self.current.is_trivia() {
@@ -1862,6 +1867,7 @@ impl<'s> Parser<'s> {
         }
     }
 
+    /// Save the current node inside the nodes vector, and update prev_end.
     fn save(&mut self) {
         let text = self.current_text();
         if self.at(SyntaxKind::Error) {
@@ -1876,6 +1882,7 @@ impl<'s> Parser<'s> {
         }
     }
 
+    /// Move the lexer forward and set the parser's new current element.
     fn lex(&mut self) {
         self.current_start = self.lexer.cursor();
         self.current = self.lexer.next();
